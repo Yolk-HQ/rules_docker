@@ -34,8 +34,8 @@ def _binary_name(ctx):
     # /app/foo/bar/baz/blah
     return "/".join([
         ctx.attr.directory,
-        ctx.attr.binary.label.package,
-        ctx.attr.binary.label.name,
+        ctx.attr.binary[0].label.package,
+        ctx.attr.binary[0].label.name,
     ])
 
 def _runfiles_dir(ctx):
@@ -148,7 +148,7 @@ def _app_layer_impl(ctx, runfiles = None, emptyfiles = None):
     parent_parts = _get_layers(ctx, ctx.attr.name, ctx.attr.base)
     filepath = _final_file_path if ctx.attr.binary else layer_file_path
     emptyfilepath = _final_emptyfile_path if ctx.attr.binary else _layer_emptyfile_path
-    dep = ctx.attr.dep or ctx.attr.binary
+    dep = (ctx.attr.dep or ctx.attr.binary)[0]
     top_layer = ctx.attr.binary and not ctx.attr.dep
 
     if ctx.attr.create_empty_workspace_dir:
@@ -239,6 +239,18 @@ def _app_layer_impl(ctx, runfiles = None, emptyfiles = None):
         null_cmd = args == [],
     )
 
+def _container_transition_impl(settings, attr):
+    _ignore = (settings, attr)
+    return {
+        "//command_line_option:platforms": "@io_bazel_rules_docker//platforms:linux_amd64",
+    }
+
+container_transition = transition(
+    implementation = _container_transition_impl,
+    inputs = [],
+    outputs = ["//command_line_option:platforms"],
+)
+
 image = struct(
     attrs = dicts.add(_container.image.attrs, {
         # The base image on which to overlay the dependency layers.
@@ -250,7 +262,7 @@ image = struct(
         # the runfiles dir.
         "binary": attr.label(
             executable = True,
-            cfg = "target",
+            cfg = container_transition,
         ),
         # Set this to true to create an empty workspace directory under the
         # app directory specified as the 'directory' attribute.
@@ -263,11 +275,14 @@ image = struct(
         # The dependency whose runfiles we're appending.
         # If not specified, then the layer will be treated as the top layer,
         # and all remaining deps of "binary" will be added under runfiles.
-        "dep": attr.label(),
+        "dep": attr.label(cfg = container_transition),
         "directory": attr.string(default = "/app"),
         "entrypoint": attr.string_list(default = []),
         "legacy_run_behavior": attr.bool(default = False),
         "workdir": attr.string(default = ""),
+        "_whitelist_function_transition": attr.label(
+            default = "//tools/whitelists/function_transition_whitelist",
+        ),
     }),
     outputs = _container.image.outputs,
     toolchains = ["@io_bazel_rules_docker//toolchains/docker:toolchain_type"],

@@ -56,3 +56,11 @@ platform(
     ],
     parents = ["@buildkite_config//config:platform"],
 )
+
+platform(
+    name = "linux_amd64",
+    constraint_values = [
+        "@platforms//os:linux",
+        "@platforms//cpu:x86_64",
+    ],
+)
